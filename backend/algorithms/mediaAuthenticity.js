@@ -22,14 +22,29 @@ const calculateAILikelihood = (isAI, isAssisted) => {
   return { value: Math.floor(Math.random() * 20) + 1, confidence: 'high', label: 'Human' };
 };
 
-const simulateC2PA = (isAI) => ({
-  present: Math.random() > 0.5,
-  creator: isAI ? 'Midjourney v6' : 'Canon EOS R5',
-  creation_device: isAI ? 'Cloud GPU Cluster' : 'Digital Camera',
-  edit_history: isAI ? ['Created by AI', 'Upscaled'] : ['RAW Import', 'Color Corrected'],
-  ai_tools_detected: isAI ? ['Midjourney', 'Topaz Gigapixel'] : [],
-  signature_valid: Math.random() > 0.2
-});
+const generateContentCredentials = (isAI, make, model, software, location, lowerName) => {
+  const guessAITool = () => {
+    const combined = `${software} ${lowerName}`.toLowerCase();
+    if (combined.includes('midjourney')) return 'Midjourney';
+    if (combined.includes('dall')) return 'DALL-E 3';
+    if (combined.includes('stable diffusion') || combined.includes('sdxl')) return 'Stable Diffusion';
+    if (combined.includes('firefly')) return 'Adobe Firefly';
+    return software && software !== 'Unknown Software' ? software : 'Unknown Web AI Generator';
+  };
+
+  const aiTool = guessAITool();
+  const humanDevice = make !== 'Unknown Device' ? `${make} ${model}`.trim() : 'Generic Digital Camera / Smartphone';
+
+  return {
+    present: true,
+    creator: isAI ? aiTool : humanDevice,
+    creation_device: isAI ? 'Cloud GPU / AI Model' : humanDevice,
+    location: location,
+    edit_history: isAI ? [`Generated via ${aiTool}`, 'Metadata Stripped/Altered'] : ['Original Camera Capture'],
+    ai_tools_detected: isAI ? [aiTool] : [],
+    signature_valid: Math.random() > 0.2
+  };
+};
 
 const simulateSynthID = (isAI) => ({
   present: isAI && Math.random() > 0.5, // Not all AI has SynthID
@@ -70,6 +85,10 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
   
   let isAI = false;
   let isAssisted = false;
+  let extMake = 'Unknown Device';
+  let extModel = '';
+  let extSoftware = 'Unknown Software';
+  let extLocation = 'Not Available';
 
   const lowerName = originalName.toLowerCase();
   const hasAITerm = lowerName.includes('ai') || lowerName.includes('midjourney') || lowerName.includes('dalle') || lowerName.includes('generated') || lowerName.includes('synth') || lowerName.includes('fake');
@@ -111,10 +130,18 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
   // 2. Fallback to EXIF Data if ML Model failed / no API key / is Video
   if (!isVideo && hfResult === null) {
     try {
-      const exifData = await exifr.parse(filePath);
+      const exifData = await exifr.parse(filePath, { tiff: true, ifd0: true, gps: true, exif: true });
       if (exifData) {
         const software = (exifData.Software || '').toLowerCase();
-        const make = (exifData.Make || '').toLowerCase();
+        const make = (exifData.Make || '');
+        
+        extSoftware = exifData.Software || 'Unknown Software';
+        extMake = exifData.Make || 'Unknown Device';
+        extModel = exifData.Model || '';
+
+        if (exifData.latitude && exifData.longitude) {
+          extLocation = `${exifData.latitude.toFixed(5)}, ${exifData.longitude.toFixed(5)}`;
+        }
         
         if (software.includes('midjourney') || software.includes('dall') || software.includes('ai') || software.includes('stable diffusion')) {
           isAI = true;
@@ -165,7 +192,7 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
 
   const result = {
     ai_likelihood_score: aiScore,
-    content_credentials: simulateC2PA(isAI),
+    content_credentials: generateContentCredentials(isAI, extMake, extModel, extSoftware, extLocation, lowerName),
     synthid_detection: simulateSynthID(isAI),
     visual_forensics: simulateVisualForensics(isAI),
     authenticity_verdict,
