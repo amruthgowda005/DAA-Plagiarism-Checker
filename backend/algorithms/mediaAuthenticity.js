@@ -17,115 +17,142 @@ const imageSize = require('image-size');
 
 // ── Layer 3: AI Visual Fingerprint Engine ─────────────────────────────────────
 /**
- * Different AI tools leave distinct "visual fingerprints":
- * - Specific output resolutions they default to
- * - Aspect ratios they prefer
- * - File formats they export
- * - Bytes-per-pixel density (AI images are often highly compressed or perfectly clean)
+ * Each AI tool has distinct visual signatures that survive resizing:
+ * - Characteristic aspect ratios
+ * - Preferred output formats
+ * - Bytes-per-pixel density ranges
+ * - Filename patterns from their export systems
+ * Based on real data analysis of actual AI outputs.
  */
 const fingerprintAITool = (filePath, mimeType, lowerName) => {
   let dimensions = null;
-  try { dimensions = imageSize(filePath); } catch (e) { /* ignore */ }
+  try {
+    const buf = fs.readFileSync(filePath);
+    dimensions = imageSize.imageSize(buf);
+  } catch (e) {
+    try { dimensions = imageSize.imageSize(filePath); } catch (e2) { /* ignore */ }
+  }
 
-  const ext = path.extname(lowerName).replace('.', '');
+  const ext = path.extname(lowerName).replace('.', '').toLowerCase();
   const fileSizeBytes = fs.statSync(filePath).size;
 
   let detectedTool = null;
-  let toolConfidence = 'medium';
+  let toolConfidence = 'low';
   let toolSignals = [];
 
-  if (dimensions) {
+  // ── Priority 0: Filename pattern (strongest signal) ──────────────────────
+  if (lowerName.includes('chatgpt') || lowerName.includes('chatgpt_image') || lowerName.includes('gpt_image')) {
+    detectedTool = 'DALL-E 3 (ChatGPT)';
+    toolConfidence = 'high';
+    toolSignals.push('Filename contains ChatGPT export pattern');
+  } else if (lowerName.includes('midjourney') || lowerName.includes('_mj_') || lowerName.includes('mj_')) {
+    detectedTool = 'Midjourney';
+    toolConfidence = 'high';
+    toolSignals.push('Filename matches Midjourney export pattern');
+  } else if (lowerName.includes('dalle') || lowerName.includes('dall-e') || lowerName.includes('dall_e')) {
+    detectedTool = 'DALL-E 3 (OpenAI)';
+    toolConfidence = 'high';
+    toolSignals.push('Filename contains DALL-E pattern');
+  } else if (lowerName.includes('stable_diffusion') || lowerName.includes('sdxl') || lowerName.includes('_sd_')) {
+    detectedTool = 'Stable Diffusion XL';
+    toolConfidence = 'high';
+    toolSignals.push('Filename matches Stable Diffusion export pattern');
+  } else if (lowerName.includes('firefly') || lowerName.includes('adobe_')) {
+    detectedTool = 'Adobe Firefly';
+    toolConfidence = 'high';
+    toolSignals.push('Filename matches Adobe Firefly pattern');
+  } else if (lowerName.includes('gemini') || lowerName.includes('imagen')) {
+    detectedTool = 'Google Imagen / Gemini';
+    toolConfidence = 'high';
+    toolSignals.push('Filename matches Google AI pattern');
+  } else if (lowerName.includes('runway') || lowerName.includes('runwayml')) {
+    detectedTool = 'RunwayML';
+    toolConfidence = 'high';
+    toolSignals.push('Filename matches RunwayML export pattern');
+  } else if (lowerName.includes('leonardo') || lowerName.includes('leo_')) {
+    detectedTool = 'Leonardo.ai';
+    toolConfidence = 'high';
+    toolSignals.push('Filename matches Leonardo.ai pattern');
+  }
+
+  // ── Priority 1: Dimension + format analysis ───────────────────────────────
+  if (!detectedTool && dimensions) {
     const { width = 0, height = 0 } = dimensions;
-    const aspectRatio = width && height ? (width / height).toFixed(2) : null;
+    const ratio = width && height ? parseFloat((width / height).toFixed(3)) : 0;
     const megapixels = (width * height) / 1_000_000;
     const bytesPerPixel = width && height ? fileSizeBytes / (width * height) : 0;
+    const allDimsEvenBy8 = width % 8 === 0 && height % 8 === 0;
 
-    // ── Midjourney Fingerprints ──
-    // Defaults: 1024x1024, 1456x816, 816x1456, 1232x928, 928x1232
-    // Aspect ratios: 1:1, 16:9, 9:16, 4:3, 3:4
-    // Format: JPG (always), very high quality, large file size
-    const isMJResolution = (
-      (width === 1024 && height === 1024) ||
-      (width === 1456 && height === 816) ||
-      (width === 816 && height === 1456) ||
-      (width === 1232 && height === 928) ||
-      (width === 2048 && height === 2048) ||
-      (width === 1344 && height === 768) ||
-      (width === 768 && height === 1344)
-    );
-    if (isMJResolution && (ext === 'jpg' || ext === 'jpeg') && bytesPerPixel > 0.3) {
-      detectedTool = 'Midjourney';
+    toolSignals.push(`Dimensions: ${width}x${height} (ratio: ${ratio})`);
+    toolSignals.push(`Format: ${ext.toUpperCase()}, File density: ${bytesPerPixel.toFixed(3)} bytes/pixel`);
+
+    // DALL-E 3 / ChatGPT: High bpp PNG, no EXIF, specific ratios
+    // Real data: 1148x1370 (ratio 0.838), 1536x1024 (ratio 1.5), 1122x1402 (ratio 0.8)
+    if (ext === 'png' && bytesPerPixel > 0.7 && megapixels > 0.5 && megapixels < 5) {
+      detectedTool = 'DALL-E 3 / ChatGPT Image';
       toolConfidence = 'high';
-      toolSignals.push(`Resolution ${width}x${height} matches Midjourney output`, 'JPEG format with high-quality compression');
+      toolSignals.push('PNG format with high pixel density (>0.7 bpp) — characteristic of DALL-E 3 exports');
+      toolSignals.push('Megapixel range matches ChatGPT image generation output');
     }
 
-    // ── DALL-E 3 Fingerprints ──
-    // Defaults: 1024x1024, 1792x1024, 1024x1792
-    // Format: PNG (default), no EXIF whatsoever
-    const isDALLEResolution = (
-      (width === 1024 && height === 1024) ||
-      (width === 1792 && height === 1024) ||
-      (width === 1024 && height === 1792)
-    );
-    if (isDALLEResolution && ext === 'png') {
-      detectedTool = 'DALL-E 3 (OpenAI)';
-      toolConfidence = 'high';
-      toolSignals.push(`Resolution ${width}x${height} is a DALL-E 3 standard output`, 'PNG format with zero EXIF matches DALL-E export');
+    // Midjourney: High quality JPEG, very high bpp, large dimensions
+    // Real: typically 1024x1024, 1456x816, 1232x928 — but after Discord download may vary
+    if (!detectedTool && (ext === 'jpg' || ext === 'jpeg') && bytesPerPixel > 0.4 && megapixels > 0.8 && megapixels < 6) {
+      const isMJRatio = Math.abs(ratio - 1.0) < 0.05 || Math.abs(ratio - 1.778) < 0.08 || Math.abs(ratio - 0.563) < 0.05 || Math.abs(ratio - 1.333) < 0.06;
+      if (isMJRatio) {
+        detectedTool = 'Midjourney';
+        toolConfidence = 'medium';
+        toolSignals.push(`Aspect ratio ${ratio} matches Midjourney default output`);
+        toolSignals.push('High-quality JPEG with density typical of Midjourney exports');
+      }
     }
 
-    // ── Stable Diffusion Fingerprints ──
-    // Common: 512x512, 768x768, 768x512, 512x768 (v1.5)
-    // XL: 1024x1024, 1152x896, 896x1152, 1216x832, 832x1216, 1344x768, 768x1344
-    const isSDv1 = (width <= 768 && height <= 768 && (width % 64 === 0) && (height % 64 === 0));
-    const isSDXL = (
-      (width === 1152 && height === 896) ||
-      (width === 896 && height === 1152) ||
-      (width === 1216 && height === 832) ||
-      (width === 832 && height === 1216)
-    );
-    if ((isSDv1 || isSDXL) && !detectedTool) {
-      detectedTool = isSDXL ? 'Stable Diffusion XL (SDXL)' : 'Stable Diffusion';
-      toolConfidence = 'high';
-      toolSignals.push(`Resolution ${width}x${height} is a Stable Diffusion canonical output`, `Dimensions divisible by 64 (SD grid alignment)`);
+    // Stable Diffusion: Dimensions divisible by 64, typically < 2MP
+    if (!detectedTool && allDimsEvenBy8 && megapixels < 1.2 && width % 64 === 0 && height % 64 === 0) {
+      detectedTool = 'Stable Diffusion';
+      toolConfidence = 'medium';
+      toolSignals.push(`Dimensions ${width}x${height} are multiples of 64 — the SD latent space alignment`);
     }
 
-    // ── Adobe Firefly Fingerprints ──
-    // Default: 2048x2048, 1792x2304, 2304x1792, 2688x1536
-    const isFirefly = (
-      (width === 2048 && height === 2048) ||
-      (width === 1792 && height === 2304) ||
-      (width === 2304 && height === 1792)
-    );
-    if (isFirefly && !detectedTool) {
-      detectedTool = 'Adobe Firefly';
-      toolConfidence = 'high';
-      toolSignals.push(`Resolution ${width}x${height} matches Adobe Firefly output`, 'High megapixel output typical of Firefly');
+    // SDXL: Larger SD dims, specific aspect ratios
+    if (!detectedTool && allDimsEvenBy8 && megapixels >= 1 && megapixels <= 1.5 && width % 64 === 0) {
+      detectedTool = 'Stable Diffusion XL (SDXL)';
+      toolConfidence = 'medium';
+      toolSignals.push(`High-res dims ${width}x${height} with latent alignment matches SDXL output`);
     }
 
-    // ── Google Imagen / Gemini Fingerprints ──
-    // WEBP format, specific sizes
-    if (ext === 'webp' && megapixels >= 0.5 && !detectedTool) {
+    // Google Imagen / Gemini: WEBP format
+    if (!detectedTool && ext === 'webp') {
       detectedTool = 'Google Imagen / Gemini';
       toolConfidence = 'medium';
-      toolSignals.push('WEBP format strongly associated with Google Imagen/Gemini output');
+      toolSignals.push('WEBP format is the primary export format of Google Imagen and Gemini');
     }
 
-    // ── Generic AI Fallback (No EXIF, clean PNG/JPG at even resolution) ──
-    if (!detectedTool && megapixels > 0) {
-      const isEvenResolution = (width % 8 === 0 && height % 8 === 0);
-      if (isEvenResolution) {
-        detectedTool = 'Unknown Web AI Generator';
-        toolConfidence = 'low';
-        toolSignals.push(
-          `Image dimensions (${width}x${height}) are multiples of 8 — a universal AI generator alignment`,
-          'No camera hardware signature found in EXIF'
-        );
-      }
+    // Adobe Firefly: Very high megapixels, PNG
+    if (!detectedTool && ext === 'png' && megapixels > 4) {
+      detectedTool = 'Adobe Firefly';
+      toolConfidence = 'medium';
+      toolSignals.push(`Very high resolution (${megapixels.toFixed(1)}MP) PNG matches Adobe Firefly quality output`);
+    }
+
+    // Generic AI fallback: No EXIF + even 8-divisible dims
+    if (!detectedTool && allDimsEvenBy8) {
+      detectedTool = 'Unknown Web AI Generator';
+      toolConfidence = 'low';
+      toolSignals.push(`Both dimensions (${width}x${height}) are multiples of 8 — a universal AI model grid requirement`);
+      toolSignals.push('No camera hardware signature found in binary metadata');
+    }
+
+    // Last resort
+    if (!detectedTool) {
+      detectedTool = 'Unknown Web AI Generator';
+      toolConfidence = 'low';
+      toolSignals.push('No camera EXIF signature. Image appears web-sourced or metadata-stripped.');
     }
   }
 
   return {
-    tool: detectedTool || 'Unknown AI Tool',
+    tool: detectedTool || 'Unknown Web AI Generator',
     confidence: toolConfidence,
     signals: toolSignals,
     dimensions: dimensions ? `${dimensions.width}x${dimensions.height}` : 'Unknown'
