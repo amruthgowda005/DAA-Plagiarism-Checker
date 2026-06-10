@@ -331,7 +331,7 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
 
   const authenticity_verdict = {
     final_label: verdictLabel,
-    confidence_score: hfScore || (Math.floor(Math.random() * 15) + 85),
+    confidence_score: pixelScore || (Math.floor(Math.random() * 15) + 85),
     explanation: isAI
       ? `${fingerprint?.tool && fingerprint.tool !== 'Unknown Web AI Generator' ? `Visual fingerprinting identified this as ${fingerprint.tool} output. ` : ''}Strong AI generation signals detected via ${aiScore.source}.`
       : isAssisted
