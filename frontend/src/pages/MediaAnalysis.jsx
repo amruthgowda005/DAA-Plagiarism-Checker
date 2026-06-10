@@ -374,7 +374,7 @@ export default function MediaAnalysis() {
               </h3>
               <div className="space-y-3">
                 {[
-                  { label: 'Layer 1 — HuggingFace ViT ML', val: result.detection_layers.huggingface_ml, color: 'text-purple-400' },
+                  { label: 'Layer 1 — Pixel Variance Analysis', val: result.detection_layers.huggingface_ml, color: 'text-purple-400' },
                   { label: 'Layer 2 — EXIF Binary Scan', val: result.detection_layers.exif_scan, color: 'text-blue-400' },
                   { label: 'Layer 3 — Visual Fingerprint', val: result.detection_layers.visual_fingerprint, color: 'text-amber-400' },
                   { label: 'Layer 4 — Filename Heuristic', val: result.detection_layers.filename_heuristic, color: 'text-green-400' },
