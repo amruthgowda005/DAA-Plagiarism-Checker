@@ -85,19 +85,26 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
           isAI = true;
         } else if (software.includes('photoshop') || software.includes('lightroom') || software.includes('gimp')) {
           isAssisted = true;
+        } else if (!make) {
+          // CRITICAL HEURISTIC: Real photos have a Camera 'Make' (Apple, Samsung, Canon).
+          // If an image lacks a camera signature, it's either AI generated or heavily web-compressed.
+          isAI = true;
+        } else {
+          // Has a valid Camera Make (e.g. Apple)
+          isAI = false;
         }
       } else {
-        // If absolutely ZERO metadata exists AND it's a PNG/WEBP, higher chance it's generated/scraped
-        if (mimeType === 'image/png' || mimeType === 'image/webp') {
-           // We will rely on filename for safety to prevent false positives on human screenshots
-        }
+        // Absolutely zero EXIF metadata. Real unedited photos almost ALWAYS have EXIF.
+        // AI generators strip EXIF by default.
+        isAI = true;
       }
     } catch (err) {
-      // No valid EXIF
+      // No valid EXIF format found
+      isAI = true;
     }
   }
 
-  // 2. Fallback to Filename Heuristics
+  // 2. Fallback to Filename Heuristics (Overrides)
   if (hasAITerm) isAI = true;
   if (!isAI && hasEditTerm) isAssisted = true;
 
