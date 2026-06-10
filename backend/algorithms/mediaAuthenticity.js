@@ -41,42 +41,37 @@ const fingerprintAITool = (filePath, mimeType, lowerName) => {
   let toolSignals = [];
 
   // ── Priority 0: Filename pattern (strongest signal) ──────────────────────
-  if (lowerName.includes('chatgpt') || lowerName.includes('chatgpt_image') || lowerName.includes('gpt_image')) {
-    detectedTool = 'DALL-E 3 (ChatGPT)';
-    toolConfidence = 'high';
-    toolSignals.push('Filename contains ChatGPT export pattern');
-  } else if (lowerName.includes('midjourney') || lowerName.includes('_mj_') || lowerName.includes('mj_')) {
-    detectedTool = 'Midjourney';
-    toolConfidence = 'high';
-    toolSignals.push('Filename matches Midjourney export pattern');
-  } else if (lowerName.includes('dalle') || lowerName.includes('dall-e') || lowerName.includes('dall_e')) {
-    detectedTool = 'DALL-E 3 (OpenAI)';
-    toolConfidence = 'high';
-    toolSignals.push('Filename contains DALL-E pattern');
-  } else if (lowerName.includes('stable_diffusion') || lowerName.includes('sdxl') || lowerName.includes('_sd_')) {
-    detectedTool = 'Stable Diffusion XL';
-    toolConfidence = 'high';
-    toolSignals.push('Filename matches Stable Diffusion export pattern');
-  } else if (lowerName.includes('firefly') || lowerName.includes('adobe_')) {
-    detectedTool = 'Adobe Firefly';
-    toolConfidence = 'high';
-    toolSignals.push('Filename matches Adobe Firefly pattern');
-  } else if (lowerName.includes('gemini') || lowerName.includes('imagen')) {
-    detectedTool = 'Google Imagen / Gemini';
-    toolConfidence = 'high';
-    toolSignals.push('Filename matches Google AI pattern');
-  } else if (lowerName.includes('copilot') || lowerName.includes('bing_')) {
-    detectedTool = 'Microsoft Copilot (DALL-E 3)';
-    toolConfidence = 'high';
-    toolSignals.push('Filename contains Microsoft Copilot / Bing Image Creator pattern');
-  } else if (lowerName.includes('runway') || lowerName.includes('runwayml')) {
-    detectedTool = 'RunwayML';
-    toolConfidence = 'high';
-    toolSignals.push('Filename matches RunwayML export pattern');
-  } else if (lowerName.includes('leonardo') || lowerName.includes('leo_')) {
-    detectedTool = 'Leonardo.ai';
-    toolConfidence = 'high';
-    toolSignals.push('Filename matches Leonardo.ai pattern');
+  const nameSignals = {
+    'DALL-E 3 (ChatGPT)': ['chatgpt', 'gpt_image', 'dalle', 'dall-e', 'dall_e'],
+    'Microsoft Copilot': ['copilot', 'bing_'],
+    'Midjourney': ['midjourney', '_mj_', 'mj_'],
+    'Stable Diffusion': ['stable_diffusion', 'sdxl', '_sd_', 'stablediffusion'],
+    'Adobe Firefly': ['firefly', 'adobe_'],
+    'Google Imagen / Gemini': ['gemini', 'imagen'],
+    'Meta AI (Imagine)': ['meta_ai', 'imagine_meta'],
+    'RunwayML (Video/Image)': ['runway', 'runwayml', 'gen-2', 'gen-3'],
+    'Leonardo.ai': ['leonardo', 'leo_'],
+    'Kling AI (Video)': ['kling'],
+    'OpenAI Sora (Video)': ['sora_'],
+    'Pika Labs (Video)': ['pika_', 'pikalabs'],
+    'Luma Dream Machine': ['luma_', 'dreammachine'],
+    'Haiper AI (Video)': ['haiper'],
+    'Vidu AI (Video)': ['vidu'],
+    'Craiyon': ['craiyon'],
+    'NightCafe': ['nightcafe'],
+    'Lexica': ['lexica'],
+    'Playground AI': ['playground_ai', 'playgroundai'],
+    'Tensor.art': ['tensorart', 'tensor_art'],
+    'SeaArt AI': ['seaart']
+  };
+
+  for (const [tool, keywords] of Object.entries(nameSignals)) {
+    if (keywords.some(kw => lowerName.includes(kw))) {
+      detectedTool = tool;
+      toolConfidence = 'high';
+      toolSignals.push(`Filename matches standard ${tool} export pattern`);
+      break;
+    }
   }
 
   // ── Priority 1: Dimension + format analysis ───────────────────────────────
@@ -178,15 +173,30 @@ const generateContentCredentials = (isAI, make, model, software, location, finge
     }
     // Priority 2: EXIF Software tag
     const combined = `${software} ${lowerName}`.toLowerCase();
-    if (combined.includes('copilot') || combined.includes('bing')) return 'Microsoft Copilot';
-    if (combined.includes('midjourney')) return 'Midjourney';
-    if (combined.includes('dall')) return 'DALL-E 3 (OpenAI)';
-    if (combined.includes('stable diffusion') || combined.includes('sdxl')) return 'Stable Diffusion XL';
-    if (combined.includes('firefly')) return 'Adobe Firefly';
-    if (combined.includes('gemini') || combined.includes('imagen')) return 'Google Imagen / Gemini';
-    if (combined.includes('runway')) return 'RunwayML';
-    if (combined.includes('leonardo')) return 'Leonardo.ai';
-    if (combined.includes('kling')) return 'Kling AI';
+    
+    // Check our massive registry
+    const registry = {
+      'Microsoft Copilot': ['copilot', 'bing'],
+      'Midjourney': ['midjourney'],
+      'DALL-E 3 (OpenAI)': ['dall'],
+      'Stable Diffusion XL': ['stable diffusion', 'sdxl'],
+      'Adobe Firefly': ['firefly'],
+      'Google Imagen / Gemini': ['gemini', 'imagen'],
+      'Meta AI (Imagine)': ['meta ai', 'imagine'],
+      'RunwayML': ['runway', 'gen-2', 'gen-3'],
+      'Leonardo.ai': ['leonardo'],
+      'Kling AI': ['kling'],
+      'OpenAI Sora': ['sora'],
+      'Pika Labs': ['pika'],
+      'Luma Dream Machine': ['luma', 'dream machine'],
+      'Craiyon': ['craiyon'],
+      'Playground AI': ['playground']
+    };
+
+    for (const [tool, terms] of Object.entries(registry)) {
+      if (terms.some(term => combined.includes(term))) return tool;
+    }
+    
     if (software && software !== 'Unknown Software') return software;
     // Priority 3: Fingerprint fallback
     return fingerprint?.tool || 'Unknown Web AI Generator';
