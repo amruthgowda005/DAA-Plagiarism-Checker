@@ -65,10 +65,10 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
 
   const isVideo = mimeType.startsWith('video/') || ['.mp4', '.mov', '.avi'].includes(path.extname(originalName).toLowerCase());
   
-  // Deterministic "randomness" based on filename length for consistent testing
-  const hash = originalName.length + (isVideo ? 10 : 0);
-  const isAI = hash % 3 === 0;
-  const isAssisted = hash % 3 === 1;
+  // Analyze filename metadata heuristics (Simulating AI detection model output)
+  const lowerName = originalName.toLowerCase();
+  const isAI = lowerName.includes('ai') || lowerName.includes('midjourney') || lowerName.includes('dalle') || lowerName.includes('generated') || lowerName.includes('synth');
+  const isAssisted = !isAI && (lowerName.includes('edit') || lowerName.includes('photoshop') || lowerName.includes('upscale') || lowerName.includes('mixed'));
 
   const aiScore = calculateAILikelihood(isAI, isAssisted);
   
