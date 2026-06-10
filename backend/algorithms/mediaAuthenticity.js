@@ -28,9 +28,9 @@ const fingerprintAITool = (filePath, mimeType, lowerName) => {
   let dimensions = null;
   try {
     const buf = fs.readFileSync(filePath);
-    dimensions = imageSize(buf);
+    dimensions = imageSize.imageSize(buf);
   } catch (e) {
-    try { dimensions = imageSize(filePath); } catch (e2) { /* ignore */ }
+    try { dimensions = imageSize.imageSize(filePath); } catch (e2) { /* ignore */ }
   }
 
   const ext = path.extname(lowerName).replace('.', '').toLowerCase();
