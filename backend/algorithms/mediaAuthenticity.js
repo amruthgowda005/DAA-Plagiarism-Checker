@@ -10,7 +10,9 @@
  */
 
 const path = require('path');
+const fs = require('fs');
 const exifr = require('exifr');
+const axios = require('axios');
 
 // ── Mock Helper Functions (Simulating Model Inference/Extraction) ─────────────
 
@@ -73,8 +75,41 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
   const hasAITerm = lowerName.includes('ai') || lowerName.includes('midjourney') || lowerName.includes('dalle') || lowerName.includes('generated') || lowerName.includes('synth') || lowerName.includes('fake');
   const hasEditTerm = lowerName.includes('edit') || lowerName.includes('photoshop') || lowerName.includes('upscale') || lowerName.includes('mixed');
 
-  // 1. Check EXIF Data (Deep Metadata Inspection)
-  if (!isVideo) {
+  // 1. Try Real Machine Learning Analysis (HuggingFace Inference API)
+  let hfResult = null;
+  if (!isVideo && process.env.HF_API_KEY) {
+    try {
+      const imageBuffer = fs.readFileSync(filePath);
+      const response = await axios.post(
+        'https://api-inference.huggingface.co/models/Nahrawy/AI-Generated-Image-Detection',
+        imageBuffer,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.HF_API_KEY}`,
+            'Content-Type': 'application/octet-stream'
+          },
+          timeout: 10000
+        }
+      );
+      
+      // Response format: [{label: 'fake', score: 0.98}, {label: 'real', score: 0.02}]
+      if (Array.isArray(response.data) && response.data.length > 0) {
+        const topPrediction = response.data[0];
+        if (topPrediction.label === 'fake' || topPrediction.label.includes('ai')) {
+          isAI = true;
+          hfResult = topPrediction.score * 100; // Use real ML confidence
+        } else {
+          isAI = false;
+          hfResult = (1 - topPrediction.score) * 100;
+        }
+      }
+    } catch (err) {
+      console.error("[ML API] HuggingFace inference failed or SSL blocked. Falling back to EXIF deep-scan.");
+    }
+  }
+
+  // 2. Fallback to EXIF Data if ML Model failed / no API key / is Video
+  if (!isVideo && hfResult === null) {
     try {
       const exifData = await exifr.parse(filePath);
       if (exifData) {
@@ -104,11 +139,14 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
     }
   }
 
-  // 2. Fallback to Filename Heuristics (Overrides)
+  // 3. Fallback to Filename Heuristics (Overrides)
   if (hasAITerm) isAI = true;
   if (!isAI && hasEditTerm) isAssisted = true;
 
-  const aiScore = calculateAILikelihood(isAI, isAssisted);
+  // Use ML score if available, otherwise generate heuristic score
+  const aiScore = hfResult !== null 
+    ? { value: Math.floor(hfResult), confidence: 'high', label: isAI ? 'AI Generated' : 'Human' }
+    : calculateAILikelihood(isAI, isAssisted);
   
   let verdictLabel = 'Human';
   let verdictScore = 100 - aiScore.value; // Confidence in the label
