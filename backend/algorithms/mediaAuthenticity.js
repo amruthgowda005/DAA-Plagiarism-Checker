@@ -10,6 +10,7 @@
  */
 
 const path = require('path');
+const exifr = require('exifr');
 
 // ── Mock Helper Functions (Simulating Model Inference/Extraction) ─────────────
 
@@ -65,10 +66,40 @@ const analyzeMediaAuthenticity = async (filePath, originalName, mimeType) => {
 
   const isVideo = mimeType.startsWith('video/') || ['.mp4', '.mov', '.avi'].includes(path.extname(originalName).toLowerCase());
   
-  // Analyze filename metadata heuristics (Simulating AI detection model output)
+  let isAI = false;
+  let isAssisted = false;
+
   const lowerName = originalName.toLowerCase();
-  const isAI = lowerName.includes('ai') || lowerName.includes('midjourney') || lowerName.includes('dalle') || lowerName.includes('generated') || lowerName.includes('synth');
-  const isAssisted = !isAI && (lowerName.includes('edit') || lowerName.includes('photoshop') || lowerName.includes('upscale') || lowerName.includes('mixed'));
+  const hasAITerm = lowerName.includes('ai') || lowerName.includes('midjourney') || lowerName.includes('dalle') || lowerName.includes('generated') || lowerName.includes('synth') || lowerName.includes('fake');
+  const hasEditTerm = lowerName.includes('edit') || lowerName.includes('photoshop') || lowerName.includes('upscale') || lowerName.includes('mixed');
+
+  // 1. Check EXIF Data (Deep Metadata Inspection)
+  if (!isVideo) {
+    try {
+      const exifData = await exifr.parse(filePath);
+      if (exifData) {
+        const software = (exifData.Software || '').toLowerCase();
+        const make = (exifData.Make || '').toLowerCase();
+        
+        if (software.includes('midjourney') || software.includes('dall') || software.includes('ai') || software.includes('stable diffusion')) {
+          isAI = true;
+        } else if (software.includes('photoshop') || software.includes('lightroom') || software.includes('gimp')) {
+          isAssisted = true;
+        }
+      } else {
+        // If absolutely ZERO metadata exists AND it's a PNG/WEBP, higher chance it's generated/scraped
+        if (mimeType === 'image/png' || mimeType === 'image/webp') {
+           // We will rely on filename for safety to prevent false positives on human screenshots
+        }
+      }
+    } catch (err) {
+      // No valid EXIF
+    }
+  }
+
+  // 2. Fallback to Filename Heuristics
+  if (hasAITerm) isAI = true;
+  if (!isAI && hasEditTerm) isAssisted = true;
 
   const aiScore = calculateAILikelihood(isAI, isAssisted);
   
