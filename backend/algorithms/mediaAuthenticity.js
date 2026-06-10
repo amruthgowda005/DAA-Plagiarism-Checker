@@ -65,6 +65,10 @@ const fingerprintAITool = (filePath, mimeType, lowerName) => {
     detectedTool = 'Google Imagen / Gemini';
     toolConfidence = 'high';
     toolSignals.push('Filename matches Google AI pattern');
+  } else if (lowerName.includes('copilot') || lowerName.includes('bing_')) {
+    detectedTool = 'Microsoft Copilot (DALL-E 3)';
+    toolConfidence = 'high';
+    toolSignals.push('Filename contains Microsoft Copilot / Bing Image Creator pattern');
   } else if (lowerName.includes('runway') || lowerName.includes('runwayml')) {
     detectedTool = 'RunwayML';
     toolConfidence = 'high';
@@ -174,6 +178,7 @@ const generateContentCredentials = (isAI, make, model, software, location, finge
     }
     // Priority 2: EXIF Software tag
     const combined = `${software} ${lowerName}`.toLowerCase();
+    if (combined.includes('copilot') || combined.includes('bing')) return 'Microsoft Copilot';
     if (combined.includes('midjourney')) return 'Midjourney';
     if (combined.includes('dall')) return 'DALL-E 3 (OpenAI)';
     if (combined.includes('stable diffusion') || combined.includes('sdxl')) return 'Stable Diffusion XL';
