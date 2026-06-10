@@ -4,7 +4,7 @@ import {
   Image as ImageIcon,
   UploadCloud, Loader2, AlertTriangle, ShieldCheck,
   Video, RefreshCw, Camera, MapPin, Bot, Cpu, Smartphone,
-  CheckCircle2, XCircle, Zap, Eye, Film
+  CheckCircle2, XCircle, Zap, Eye, Film, Layers, Fingerprint, Cpu as CpuIcon, Info
 } from 'lucide-react';
 
 // ── Detect manufacturer type ─────────────────────────────────────────────────
@@ -242,38 +242,66 @@ export default function MediaAnalysis() {
 
           {/* ── AI IMAGE: Tool Detection ─────────────────────────────── */}
           {(isAIGen || isAssisted) && (
-            <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-6">
-              <h3 className="text-base font-bold text-slate-800 mb-5 pb-3 border-b border-red-100 flex items-center gap-2">
-                <Bot size={18} className="text-red-500" /> AI Generation Source
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-1 p-5 bg-red-50 rounded-xl border border-red-100 flex flex-col items-center text-center gap-2">
-                  <Zap size={28} className="text-red-500" />
-                  <p className="text-xs font-bold text-red-700 uppercase tracking-wider">Detected AI Tool</p>
-                  <p className="text-xl font-black text-red-900">{result.content_credentials.ai_tools_detected[0] || 'Unknown AI Generator'}</p>
-                </div>
-                <div className="md:col-span-2 space-y-3">
-                  <div className="flex items-start justify-between gap-4 p-3 bg-slate-50 rounded-xl">
-                    <span className="text-sm text-slate-500">Generation Platform</span>
-                    <span className="text-sm font-bold text-slate-800">{result.content_credentials.creator}</span>
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-6">
+                <h3 className="text-base font-bold text-slate-800 mb-5 pb-3 border-b border-red-100 flex items-center gap-2">
+                  <Bot size={18} className="text-red-500" /> AI Generation Source
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-1 p-5 bg-red-50 rounded-xl border border-red-100 flex flex-col items-center text-center gap-2">
+                    <Zap size={28} className="text-red-500" />
+                    <p className="text-xs font-bold text-red-700 uppercase tracking-wider">Detected AI Tool</p>
+                    <p className="text-lg font-black text-red-900 leading-tight">{result.content_credentials.ai_tools_detected[0] || 'Unknown AI Generator'}</p>
+                    {result.content_credentials.ai_tool_fingerprint && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold mt-1 ${
+                        result.content_credentials.ai_tool_fingerprint.confidence === 'high' ? 'bg-red-100 text-red-700' :
+                        result.content_credentials.ai_tool_fingerprint.confidence === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>{result.content_credentials.ai_tool_fingerprint.confidence} confidence</span>
+                    )}
                   </div>
-                  <div className="flex items-start justify-between gap-4 p-3 bg-slate-50 rounded-xl">
-                    <span className="text-sm text-slate-500">Processing</span>
-                    <span className="text-sm font-bold text-slate-800">{result.content_credentials.creation_device}</span>
-                  </div>
-                  <div className="flex items-start justify-between gap-4 p-3 bg-slate-50 rounded-xl">
-                    <span className="text-sm text-slate-500">Workflow Detected</span>
-                    <div className="flex flex-wrap gap-1 justify-end">
-                      {result.content_credentials.edit_history.map((h, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">{h}</span>
-                      ))}
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="flex items-start justify-between gap-4 p-3 bg-slate-50 rounded-xl">
+                      <span className="text-sm text-slate-500 shrink-0">Generation Platform</span>
+                      <span className="text-sm font-bold text-slate-800 text-right">{result.content_credentials.creator}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                    <span className="text-sm text-slate-500">SynthID Watermark</span>
-                    <Badge ok={!result.synthid_detection.present} label={result.synthid_detection.present ? `Detected (${result.synthid_detection.confidence})` : 'Not Found'} />
+                    <div className="flex items-start justify-between gap-4 p-3 bg-slate-50 rounded-xl">
+                      <span className="text-sm text-slate-500 shrink-0">Processing</span>
+                      <span className="text-sm font-bold text-slate-800">{result.content_credentials.creation_device}</span>
+                    </div>
+                    <div className="flex items-start justify-between gap-4 p-3 bg-slate-50 rounded-xl">
+                      <span className="text-sm text-slate-500 shrink-0">Workflow</span>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {result.content_credentials.edit_history.map((h, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">{h}</span>
+                        ))}
+                      </div>
+                    </div>
+                    {result.content_credentials.ai_tool_fingerprint?.dimensions && (
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                        <span className="text-sm text-slate-500">Image Dimensions</span>
+                        <span className="font-mono text-sm font-bold text-slate-800">{result.content_credentials.ai_tool_fingerprint.dimensions}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Fingerprint Signals */}
+                {result.content_credentials.ai_tool_fingerprint?.signals?.length > 0 && (
+                  <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                    <p className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Fingerprint size={14} /> Visual Fingerprint Signals
+                    </p>
+                    <ul className="space-y-2">
+                      {result.content_credentials.ai_tool_fingerprint.signals.map((sig, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-amber-800">
+                          <span className="text-amber-500 mt-0.5 shrink-0">→</span>
+                          {sig}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -335,6 +363,27 @@ export default function MediaAnalysis() {
                     {result.video_analysis.scene_transition_anomalies ? '⚠ Anomalous' : '✓ Natural'}
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+          {/* Detection Layers */}
+          {result.detection_layers && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-sm p-6">
+              <h3 className="text-base font-bold text-white mb-5 pb-3 border-b border-slate-700 flex items-center gap-2">
+                <Layers size={18} className="text-indigo-400" /> Detection Pipeline Breakdown
+              </h3>
+              <div className="space-y-3">
+                {[
+                  { label: 'Layer 1 — HuggingFace ViT ML', val: result.detection_layers.huggingface_ml, color: 'text-purple-400' },
+                  { label: 'Layer 2 — EXIF Binary Scan', val: result.detection_layers.exif_scan, color: 'text-blue-400' },
+                  { label: 'Layer 3 — Visual Fingerprint', val: result.detection_layers.visual_fingerprint, color: 'text-amber-400' },
+                  { label: 'Layer 4 — Filename Heuristic', val: result.detection_layers.filename_heuristic, color: 'text-green-400' },
+                ].map(({ label, val, color }) => (
+                  <div key={label} className="flex items-start justify-between gap-4 py-2 border-b border-slate-800 last:border-0">
+                    <span className="text-xs font-mono text-slate-400 shrink-0">{label}</span>
+                    <span className={`text-xs font-mono font-bold text-right ${color}`}>{val}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
